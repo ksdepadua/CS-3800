@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
     }
 
     if (sfd == -1) {
-        fprintf(stderr, "No socket found", errno);
+        fprintf(stderr, "No socket found");
         exit(EXIT_FAILURE);
     }
 
@@ -229,11 +229,45 @@ int main(int argc, char** argv) {
 
     char receiveMssg[BUFSIZE];
     ssize_t receiveStatus;
+    struct ArrayListBuf mybuf;
+    ArrayListBuf_init(&mybuf);  // Create ArrayListBuf
+    char tempBuff[BUFSIZE];
+
+    FILE *file = fopen(args.target, "w");
+
+    if(file == NULL) {
+        printf("Error opening the file!\n");
+        return 1;
+    }
 
     while ((receiveStatus = recv(sfd, receiveMssg, BUFSIZE, 0)) > 0) {
-        printf("Received %zd bytes\n", receiveStatus);
+        printf("Received %zd bytes\n", receiveStatus); // %zd for ssize_t vars; ssize_t represents a size of an allocated block of memory (along with -1 for errors)
 
-        // Later, store these bytes in the ArrayList
+        // Store these bytes in the ArrayList
+        ArrayListBuf_push(&mybuf, receiveMssg, receiveStatus);
+
+        // Get first line
+        snprintf(tempBuff, BUFSIZE, "%s", strtok(mybuf.buff, "\n"));
+            
+        // Check if status is 200 OK
+        printf("tempBuff: %s\n", tempBuff); // TEST
+        if (strstr(tempBuff, "200 OK") == NULL) {
+            printf("Server sent wrong status: %s", tempBuff);
+            exit(EXIT_FAILURE);
+        }
+        // Write data to specified target file as binary data w/ fwrite()
+        
+        // Search for body
+        while(snprintf(tempBuff, BUFSIZE, "%s", strtok(NULL, "\n")) > 0) {
+            if (strcmp(tempBuff, "\r\n")) {
+                printf("Reading data into file...\n");
+                break;
+            }
+        }
+
+        // Reads until the end of the body
+        snprintf(tempBuff, BUFSIZE, "%s", strtok(NULL, "\0"));
+        fputs(tempBuff, file);
     }
 
     if (receiveStatus < 0) {
@@ -243,8 +277,10 @@ int main(int argc, char** argv) {
         printf("Server closed the connection.\n");
     }
 
+    fclose(file);
     freeaddrinfo(node);
     close(sfd);
+    ArrayListBuf_free(&mybuf);
 
     exit(EXIT_SUCCESS);
 }
