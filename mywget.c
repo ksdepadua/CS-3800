@@ -231,7 +231,6 @@ int main(int argc, char** argv) {
     ssize_t receiveStatus;
     struct ArrayListBuf mybuf;
     ArrayListBuf_init(&mybuf);  // Create ArrayListBuf
-    char tempBuff[BUFSIZE];
 
     FILE *file = fopen(args.target, "w");
 
@@ -243,31 +242,18 @@ int main(int argc, char** argv) {
     while ((receiveStatus = recv(sfd, receiveMssg, BUFSIZE, 0)) > 0) {
         printf("Received %zd bytes\n", receiveStatus); // %zd for ssize_t vars; ssize_t represents a size of an allocated block of memory (along with -1 for errors)
 
-        // Store these bytes in the ArrayList
+        // Store the whole response into ArrayList
         ArrayListBuf_push(&mybuf, receiveMssg, receiveStatus);
+    }
 
-        // Get first line
-        snprintf(tempBuff, BUFSIZE, "%s", strtok(mybuf.buff, "\n"));
-            
-        // Check if status is 200 OK
-        printf("tempBuff: %s\n", tempBuff); // TEST
-        if (strstr(tempBuff, "200 OK") == NULL) {
-            printf("Server sent wrong status: %s", tempBuff);
-            exit(EXIT_FAILURE);
-        }
-        // Write data to specified target file as binary data w/ fwrite()
-        
-        // Search for body
-        while(snprintf(tempBuff, BUFSIZE, "%s", strtok(NULL, "\n")) > 0) {
-            if (strcmp(tempBuff, "\r\n")) {
-                printf("Reading data into file...\n");
-                break;
-            }
-        }
-
-        // Reads until the end of the body
-        snprintf(tempBuff, BUFSIZE, "%s", strtok(NULL, "\0"));
-        fputs(tempBuff, file);
+    // Check if server sent "200 OK" status
+    if(strstr(mybuf.buff, "200 OK") == NULL) {
+        perror("Server didn't send 200 OK status.");
+    }
+    else {
+        // Find the body of HTTP response
+        char* startBody = strtok(mybuf.buff, "\r\n");
+        fwrite(startBody + 2, 1, mybuf.N, file);
     }
 
     if (receiveStatus < 0) {
